@@ -3,8 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <title>Conversor XLSX → CSV (múltiplas abas)</title>
-  <!-- ✅ garantir que a lib esteja carregada antes -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.19.3/xlsx.full.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -100,7 +98,7 @@
     <p>Selecione um arquivo .xlsx. Vamos ler <strong>todas</strong> as planilhas e gerar um CSV para cada uma.</p>
     <label for="fileInput">Arquivo XLSX:</label>
     <input type="file" id="fileInput" accept=".xlsx,.xlsb,.xlsm,.xls" />
-    <div id="status">Aguardando arquivo…</div>
+    <div id="status">Carregando biblioteca XLSX…</div>
 
     <div class="progress-wrap" aria-label="Progresso da conversão">
       <div class="progress-bar" id="progressBar"></div>
@@ -117,17 +115,54 @@
 
   <div class="card">
     <h2 style="margin-top:0;">Log</h2>
-    <pre id="log">Nenhum erro até agora.</pre>
+    <pre id="log">Iniciando…</pre>
   </div>
 
-  <!-- ✅ nosso script principal só roda depois -->
   <script>
-    window.addEventListener('load', function() {
+    // === CARREGADOR ROBUSTO DA BIBLIOTECA ===
+    const XLSX_CDNS = [
+      "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.19.3/xlsx.full.min.js",
+      "https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js",
+      "https://unpkg.com/xlsx@0.19.3/dist/xlsx.full.min.js"
+    ];
+
+    const statusEl = document.getElementById('status');
+    const logEl = document.getElementById('log');
+
+    function log(msg) {
+      logEl.textContent += "\\n" + msg;
+    }
+
+    function loadScriptSequential(urls, idx = 0, onSuccess, onFail) {
+      if (idx >= urls.length) {
+        onFail();
+        return;
+      }
+      const url = urls[idx];
+      log("Tentando carregar: " + url);
+      const s = document.createElement('script');
+      s.src = url;
+      s.onload = function() {
+        // confere mesmo
+        if (window.XLSX) {
+          log("✅ Carregado de: " + url);
+          onSuccess();
+        } else {
+          log("⚠️ Script carregou mas XLSX não apareceu. Indo para o próximo…");
+          loadScriptSequential(urls, idx + 1, onSuccess, onFail);
+        }
+      };
+      s.onerror = function() {
+        log("❌ Erro ao carregar: " + url);
+        loadScriptSequential(urls, idx + 1, onSuccess, onFail);
+      };
+      document.head.appendChild(s);
+    }
+
+    function startApp() {
       const fileInput = document.getElementById('fileInput');
       const csvOutput = document.getElementById('csvOutput');
-      const statusEl = document.getElementById('status');
       const tabsEl = document.getElementById('tabs');
-      const logEl = document.getElementById('log');
       const progressBar = document.getElementById('progressBar');
       const sheetsContainer = document.getElementById('sheetsContainer');
 
@@ -135,11 +170,9 @@
       let activeSheet = null;
       let baseFilename = 'planilha';
 
-      fileInput.addEventListener('change', handleFile, false);
+      statusEl.textContent = 'Aguardando arquivo…';
 
-      function log(msg) {
-        logEl.textContent = (logEl.textContent ? logEl.textContent + "\n" : "") + msg;
-      }
+      fileInput.addEventListener('change', handleFile, false);
 
       function setProgress(p) {
         progressBar.style.width = p + '%';
@@ -162,7 +195,7 @@
             setProgress(20);
             const data = evt.target.result;
 
-            // ✅ aqui o XLSX já existe porque o script carregou antes
+            // ✅ aqui temos certeza que XLSX existe
             const workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
             const sheetNames = workbook.SheetNames;
 
@@ -229,6 +262,7 @@
           setProgress(0);
         };
 
+        // usar arraybuffer (mais seguro)
         reader.readAsArrayBuffer(file);
       }
 
@@ -255,6 +289,15 @@
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }
+    }
+
+    // inicia o carregamento da biblioteca
+    loadScriptSequential(XLSX_CDNS, 0, () => {
+      statusEl.textContent = 'Biblioteca XLSX carregada. Pode selecionar o arquivo.';
+      startApp();
+    }, () => {
+      statusEl.textContent = '❌ Não foi possível carregar a biblioteca XLSX de nenhum CDN.';
+      log('Tente liberar um desses domínios no seu navegador/rede ou baixe o xlsx.full.min.js e sirva localmente.');
     });
   </script>
 </body>
