@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Conversor XLSX → CSV</title>
+  <!-- SheetJS (XLSX) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.19.3/xlsx.full.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 24px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      color: #111827;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 8px 25px rgba(0,0,0,.05);
+      max-width: 900px;
+      width: 100%;
+    }
+    label {
+      display: inline-block;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    input[type="file"] {
+      display: block;
+      padding: 8px 0;
+    }
+    #status {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #374151;
+    }
+    textarea {
+      width: 100%;
+      min-height: 280px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 13px;
+      white-space: pre;
+    }
+    .btn {
+      display: inline-block;
+      background: #003399;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 16px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+    .btn:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Conversor XLSX → CSV</h1>
+    <p>Selecione um arquivo .xlsx (Excel). Vamos ler a primeira aba e converter para CSV.</p>
+    <label for="fileInput">Arquivo XLSX:</label>
+    <input type="file" id="fileInput" accept=".xlsx,.xlsb,.xlsm,.xls" />
+    <div id="status">Aguardando arquivo…</div>
+    <button id="downloadBtn" class="btn" disabled>Baixar CSV</button>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Prévia do CSV</h2>
+    <textarea id="csvOutput" placeholder="O CSV aparecerá aqui assim que o arquivo for convertido..." readonly></textarea>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const csvOutput = document.getElementById('csvOutput');
+    const statusEl = document.getElementById('status');
+    const downloadBtn = document.getElementById('downloadBtn');
+
+    let lastCSV = '';
+    let lastFilename = 'planilha.csv';
+
+    fileInput.addEventListener('change', handleFile, false);
+    downloadBtn.addEventListener('click', downloadCSV, false);
+
+    function handleFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      statusEl.textContent = 'Lendo arquivo…';
+      lastFilename = (file.name || 'planilha.xlsx').replace(/\.(xlsx|xlsm|xlsb|xls)$/i, '') + '.csv';
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const data = evt.target.result;
+        // lê o workbook
+        const workbook = XLSX.read(data, { type: 'binary' });
+
+        // pega o nome da primeira aba
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+
+        // converte pra CSV
+        // você pode trocar o FS (separator) abaixo por ';' se quiser CSV com ponto-e-vírgula
+        const csv = XLSX.utils.sheet_to_csv(worksheet, {
+          FS: ';',     // separador ; (muito usado no Brasil)
+          RS: '\n'     // quebra de linha
+          // raw: false // se quiser tentar manter formatações numéricas
+        });
+
+        lastCSV = csv;
+        csvOutput.value = csv;
+        statusEl.textContent = 'Convertido com sucesso! Aba: ' + firstSheetName;
+        downloadBtn.disabled = false;
+      };
+      reader.onerror = function() {
+        statusEl.textContent = 'Erro ao ler o arquivo.';
+      };
+      // lê como binary string
+      reader.readAsBinaryString(file);
+    }
+
+    function downloadCSV() {
+      if (!lastCSV) return;
+      const blob = new Blob([lastCSV], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = lastFilename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
