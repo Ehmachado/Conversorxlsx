@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Conversor XLSX → CSV (múltiplas abas)</title>
+  <!-- ✅ garantir que a lib esteja carregada antes -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.19.3/xlsx.full.min.js"></script>
   <style>
     * { box-sizing: border-box; }
@@ -49,10 +50,7 @@
       font-size: 14px;
       margin-top: 12px;
     }
-    .btn:disabled {
-      opacity: .4;
-      cursor: not-allowed;
-    }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
     .tabs {
       display: flex;
       gap: 8px;
@@ -70,10 +68,6 @@
       background: #003399;
       color: #fff;
     }
-    .sheet-actions {
-      margin-top: 8px;
-    }
-    /* barra de progresso */
     .progress-wrap {
       margin-top: 12px;
       width: 100%;
@@ -126,147 +120,142 @@
     <pre id="log">Nenhum erro até agora.</pre>
   </div>
 
+  <!-- ✅ nosso script principal só roda depois -->
   <script>
-    const fileInput = document.getElementById('fileInput');
-    const csvOutput = document.getElementById('csvOutput');
-    const statusEl = document.getElementById('status');
-    const tabsEl = document.getElementById('tabs');
-    const logEl = document.getElementById('log');
-    const progressBar = document.getElementById('progressBar');
-    const sheetsContainer = document.getElementById('sheetsContainer');
+    window.addEventListener('load', function() {
+      const fileInput = document.getElementById('fileInput');
+      const csvOutput = document.getElementById('csvOutput');
+      const statusEl = document.getElementById('status');
+      const tabsEl = document.getElementById('tabs');
+      const logEl = document.getElementById('log');
+      const progressBar = document.getElementById('progressBar');
+      const sheetsContainer = document.getElementById('sheetsContainer');
 
-    // vamos guardar: { sheetName: 'csv...' }
-    let csvBySheet = {};
-    let activeSheet = null;
-    let baseFilename = 'planilha';
+      let csvBySheet = {};
+      let activeSheet = null;
+      let baseFilename = 'planilha';
 
-    fileInput.addEventListener('change', handleFile, false);
+      fileInput.addEventListener('change', handleFile, false);
 
-    function log(msg) {
-      logEl.textContent = (logEl.textContent ? logEl.textContent + "\n" : "") + msg;
-    }
+      function log(msg) {
+        logEl.textContent = (logEl.textContent ? logEl.textContent + "\n" : "") + msg;
+      }
 
-    function setProgress(p) {
-      progressBar.style.width = p + '%';
-    }
+      function setProgress(p) {
+        progressBar.style.width = p + '%';
+      }
 
-    async function handleFile(e) {
-      const file = e.target.files[0];
-      if (!file) return;
+      async function handleFile(e) {
+        const file = e.target.files[0];
+        if (!file) return;
 
-      statusEl.textContent = 'Lendo arquivo…';
-      setProgress(5);
-      log('Arquivo selecionado: ' + file.name);
+        statusEl.textContent = 'Lendo arquivo…';
+        setProgress(5);
+        log('Arquivo selecionado: ' + file.name);
 
-      baseFilename = (file.name || 'planilha.xlsx').replace(/\.(xlsx|xlsm|xlsb|xls)$/i, '');
+        baseFilename = (file.name || 'planilha.xlsx').replace(/\.(xlsx|xlsm|xlsb|xls)$/i, '');
 
-      const reader = new FileReader();
+        const reader = new FileReader();
 
-      reader.onload = function(evt) {
-        try {
-          setProgress(20);
-          const data = evt.target.result;
+        reader.onload = function(evt) {
+          try {
+            setProgress(20);
+            const data = evt.target.result;
 
-          // Lemos como arraybuffer para evitar problemas de "não funciona" em alguns navegadores
-          const workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
-          const sheetNames = workbook.SheetNames;
+            // ✅ aqui o XLSX já existe porque o script carregou antes
+            const workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
+            const sheetNames = workbook.SheetNames;
 
-          if (!sheetNames || sheetNames.length === 0) {
-            statusEl.textContent = 'Nenhuma aba encontrada no arquivo.';
-            log('Nenhuma aba encontrada.');
-            setProgress(0);
-            return;
-          }
-
-          csvBySheet = {};
-          sheetsContainer.innerHTML = '';
-          tabsEl.innerHTML = '';
-          activeSheet = null;
-
-          const totalSheets = sheetNames.length;
-          sheetNames.forEach((sheetName, idx) => {
-            const worksheet = workbook.Sheets[sheetName];
-
-            // conversão pra CSV
-            const csv = XLSX.utils.sheet_to_csv(worksheet, {
-              FS: ';',
-              RS: '\n'
-            });
-
-            csvBySheet[sheetName] = csv;
-
-            // cria botão de download pra cada
-            const btn = document.createElement('button');
-            btn.textContent = 'Baixar CSV: ' + sheetName;
-            btn.className = 'btn';
-            btn.style.marginRight = '8px';
-            btn.addEventListener('click', () => downloadCSV(sheetName));
-            sheetsContainer.appendChild(btn);
-
-            // cria tab
-            const tab = document.createElement('div');
-            tab.className = 'tab' + (idx === 0 ? ' active' : '');
-            tab.textContent = sheetName;
-            tab.addEventListener('click', () => selectSheet(sheetName));
-            tabsEl.appendChild(tab);
-
-            // primeira aba vira ativa
-            if (idx === 0) {
-              activeSheet = sheetName;
-              csvOutput.value = csv;
+            if (!sheetNames || sheetNames.length === 0) {
+              statusEl.textContent = 'Nenhuma aba encontrada no arquivo.';
+              log('Nenhuma aba encontrada.');
+              setProgress(0);
+              return;
             }
 
-            // atualiza barra de progresso conforme converte
-            const prog = 20 + Math.floor(((idx + 1) / totalSheets) * 70); // vai até 90
-            setProgress(prog);
-          });
+            csvBySheet = {};
+            sheetsContainer.innerHTML = '';
+            tabsEl.innerHTML = '';
+            activeSheet = null;
 
-          statusEl.textContent = 'Convertido com sucesso! ' + totalSheets + ' aba(s) processada(s).';
-          setProgress(100);
-          setTimeout(() => setProgress(0), 2000);
-          log('Conversão concluída sem erros.');
-        } catch (err) {
-          statusEl.textContent = 'Erro ao converter.';
-          log('ERRO: ' + err.message);
-          console.error(err);
+            const totalSheets = sheetNames.length;
+            sheetNames.forEach((sheetName, idx) => {
+              const worksheet = workbook.Sheets[sheetName];
+
+              const csv = XLSX.utils.sheet_to_csv(worksheet, {
+                FS: ';',
+                RS: '\n'
+              });
+
+              csvBySheet[sheetName] = csv;
+
+              const btn = document.createElement('button');
+              btn.textContent = 'Baixar CSV: ' + sheetName;
+              btn.className = 'btn';
+              btn.style.marginRight = '8px';
+              btn.addEventListener('click', () => downloadCSV(sheetName));
+              sheetsContainer.appendChild(btn);
+
+              const tab = document.createElement('div');
+              tab.className = 'tab' + (idx === 0 ? ' active' : '');
+              tab.textContent = sheetName;
+              tab.addEventListener('click', () => selectSheet(sheetName));
+              tabsEl.appendChild(tab);
+
+              if (idx === 0) {
+                activeSheet = sheetName;
+                csvOutput.value = csv;
+              }
+
+              const prog = 20 + Math.floor(((idx + 1) / totalSheets) * 70);
+              setProgress(prog);
+            });
+
+            statusEl.textContent = 'Convertido com sucesso! ' + totalSheets + ' aba(s) processada(s).';
+            setProgress(100);
+            setTimeout(() => setProgress(0), 2000);
+            log('Conversão concluída sem erros.');
+          } catch (err) {
+            statusEl.textContent = 'Erro ao converter.';
+            log('ERRO: ' + err.message);
+            console.error(err);
+            setProgress(0);
+          }
+        };
+
+        reader.onerror = function(err) {
+          statusEl.textContent = 'Erro ao ler o arquivo.';
+          log('ERRO FileReader: ' + err.message);
           setProgress(0);
-        }
-      };
+        };
 
-      reader.onerror = function(err) {
-        statusEl.textContent = 'Erro ao ler o arquivo.';
-        log('ERRO FileReader: ' + err.message);
-        setProgress(0);
-      };
+        reader.readAsArrayBuffer(file);
+      }
 
-      // 👉 usar arraybuffer (mais compatível que readAsBinaryString)
-      reader.readAsArrayBuffer(file);
-    }
+      function selectSheet(sheetName) {
+        activeSheet = sheetName;
+        csvOutput.value = csvBySheet[sheetName] || '';
+        [...tabsEl.children].forEach(tab => {
+          tab.classList.toggle('active', tab.textContent === sheetName);
+        });
+      }
 
-    function selectSheet(sheetName) {
-      activeSheet = sheetName;
-      csvOutput.value = csvBySheet[sheetName] || '';
-      // atualizar tabs
-      [...tabsEl.children].forEach(tab => {
-        tab.classList.toggle('active', tab.textContent === sheetName);
-      });
-    }
+      function downloadCSV(sheetName) {
+        const csv = csvBySheet[sheetName];
+        if (!csv) return;
 
-    function downloadCSV(sheetName) {
-      const csv = csvBySheet[sheetName];
-      if (!csv) return;
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
 
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = baseFilename + '_' + sheetName + '.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = baseFilename + '_' + sheetName + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    });
   </script>
 </body>
 </html>
